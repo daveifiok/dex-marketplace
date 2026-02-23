@@ -190,3 +190,39 @@
     (err ERR-INVALID-INPUT-PARAMETER)
   )
 )
+
+(define-read-only (get-transaction-history (transaction-id uint))
+  (map-get? customer-transaction-records {
+    customer-address: tx-sender,
+    transaction-identifier: transaction-id,
+  })
+)
+
+(define-read-only (get-marketplace-owner-address)
+  (var-get marketplace-owner-address)
+)
+
+(define-read-only (get-marketplace-analytics)
+  {
+    total-revenue-generated: (var-get total-marketplace-revenue),
+    total-transactions-completed: (var-get total-completed-transactions),
+    marketplace-operational-status: (var-get is-marketplace-operational),
+    next-product-id: (var-get next-available-product-id),
+    next-transaction-id: (var-get next-available-transaction-id),
+  }
+)
+
+;; PRODUCT EXISTENCE VERIFICATION
+
+(define-private (verify-product-availability (product-id uint))
+  (if (validate-product-identifier product-id)
+    (match (get-product-details product-id)
+      product-info (if (get is-active product-info)
+        (ok true)
+        (err ERR-PRODUCT-NOT-FOUND)
+      )
+      (err ERR-PRODUCT-NOT-FOUND)
+    )
+    (err ERR-INVALID-INPUT-PARAMETER)
+  )
+)
