@@ -113,3 +113,18 @@
     (<= price maximum-price-per-unit)
   )
 )
+
+(define-private (validate-discount-percentage (discount uint))
+  (<= discount maximum-discount-percentage)
+)
+
+(define-private (validate-product-name (name (string-ascii 64)))
+  (and
+    (>= (len name) minimum-product-name-length)
+    (<= (len name) maximum-product-name-length)
+  )
+)
+
+(define-private (validate-marketplace-operational)
+  (var-get is-marketplace-operational)
+)
