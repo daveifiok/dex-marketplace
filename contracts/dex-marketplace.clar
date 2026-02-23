@@ -113,3 +113,165 @@
     (<= price maximum-price-per-unit)
   )
 )
+
+(define-private (validate-discount-percentage (discount uint))
+  (<= discount maximum-discount-percentage)
+)
+
+(define-private (validate-product-name (name (string-ascii 64)))
+  (and
+    (>= (len name) minimum-product-name-length)
+    (<= (len name) maximum-product-name-length)
+  )
+)
+
+(define-private (validate-marketplace-operational)
+  (var-get is-marketplace-operational)
+)
+
+(define-private (validate-owner-permissions)
+  (is-eq tx-sender (var-get marketplace-owner-address))
+)
+
+;; PRODUCT INFORMATION QUERIES
+
+(define-read-only (get-product-details (product-id uint))
+  (if (validate-product-identifier product-id)
+    (map-get? marketplace-product-catalog { product-identifier: product-id })
+    none
+  )
+)
+
+(define-read-only (get-applicable-volume-discount
+    (product-id uint)
+    (purchase-quantity uint)
+  )
+  (if (and (validate-product-identifier product-id) (validate-quantity-amount purchase-quantity))
+    (default-to {
+      discount-percentage: u0,
+      is-tier-active: false,
+    }
+      (map-get? volume-discount-configuration {
+        product-identifier: product-id,
+        minimum-quantity-threshold: purchase-quantity,
+      })
+    )
+    {
+      discount-percentage: u0,
+      is-tier-active: false,
+    }
+  )
+)
+
+(define-read-only (calculate-final-order-price
+    (product-id uint)
+    (requested-quantity uint)
+  )
+  (if (and (validate-product-identifier product-id) (validate-quantity-amount requested-quantity))
+    (match (get-product-details product-id)
+      product-info (let (
+          (base-unit-price (get unit-price product-info))
+          (volume-discount-info (get-applicable-volume-discount product-id requested-quantity))
+          (applicable-discount-rate (get discount-percentage volume-discount-info))
+          (discount-multiplier (- u100 applicable-discount-rate))
+          (subtotal-amount (* base-unit-price requested-quantity))
+          (final-discounted-price (/ (* subtotal-amount discount-multiplier) u100))
+        )
+        (ok {
+          base-unit-price: base-unit-price,
+          quantity-ordered: requested-quantity,
+          discount-percentage-applied: applicable-discount-rate,
+          final-total-price: final-discounted-price,
+          original-subtotal: subtotal-amount,
+        })
+      )
+      (err ERR-PRODUCT-NOT-FOUND)
+    )
+    (err ERR-INVALID-INPUT-PARAMETER)
+  )
+)
+
+(define-read-only (get-transaction-history (transaction-id uint))
+  (map-get? customer-transaction-records {
+    customer-address: tx-sender,
+    transaction-identifier: transaction-id,
+  })
+)
+
+(define-read-only (get-marketplace-owner-address)
+  (var-get marketplace-owner-address)
+)
+
+(define-read-only (get-marketplace-analytics)
+  {
+    total-revenue-generated: (var-get total-marketplace-revenue),
+    total-transactions-completed: (var-get total-completed-transactions),
+    marketplace-operational-status: (var-get is-marketplace-operational),
+    next-product-id: (var-get next-available-product-id),
+    next-transaction-id: (var-get next-available-transaction-id),
+  }
+)
+
+;; PRODUCT EXISTENCE VERIFICATION
+
+(define-private (verify-product-availability (product-id uint))
+  (if (validate-product-identifier product-id)
+    (match (get-product-details product-id)
+      product-info (if (get is-active product-info)
+        (ok true)
+        (err ERR-PRODUCT-NOT-FOUND)
+      )
+      (err ERR-PRODUCT-NOT-FOUND)
+    )
+    (err ERR-INVALID-INPUT-PARAMETER)
+  )
+)
+
+(define-private (verify-sufficient-stock
+    (product-id uint)
+    (required-quantity uint)
+  )
+  (match (get-product-details product-id)
+    product-info (if (>= (get stock-quantity product-info) required-quantity)
+      (ok true)
+      (err ERR-INSUFFICIENT-STOCK)
+    )
+    (err ERR-PRODUCT-NOT-FOUND)
+  )
+)
+
+;; PRODUCT CATALOG MANAGEMENT
+
+(define-public (register-new-product
+    (product-name (string-ascii 64))
+    (unit-price uint)
+    (initial-stock uint)
+  )
+  (begin
+    ;; Permission and operational validations
+    (asserts! (validate-owner-permissions) ERR-UNAUTHORIZED-ACCESS)
+    (asserts! (validate-marketplace-operational) ERR-MARKETPLACE-LOCKED)
+
+    ;; Input parameter validations
+    (asserts! (validate-product-name product-name) ERR-INVALID-PRODUCT-NAME)
+    (asserts! (validate-price-amount unit-price) ERR-INVALID-PRICE-AMOUNT)
+    (asserts! (validate-quantity-amount initial-stock)
+      ERR-INVALID-QUANTITY-REQUESTED
+    )
+
+    ;; Create new product entry
+    (let ((current-product-id (var-get next-available-product-id)))
+      (map-set marketplace-product-catalog { product-identifier: current-product-id } {
+        product-name: product-name,
+        unit-price: unit-price,
+        stock-quantity: initial-stock,
+        is-active: true,
+      })
+
+      ;; Update product identifier counter
+      (var-set next-available-product-id (+ current-product-id u1))
+
+      (ok current-product-id)
+    )
+  )
+)
