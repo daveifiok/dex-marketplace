@@ -54,3 +54,30 @@
     is-active: bool,
   }
 )
+
+;; Volume discount configuration for bulk purchasing incentives
+(define-map volume-discount-configuration
+  {
+    product-identifier: uint,
+    minimum-quantity-threshold: uint,
+  }
+  {
+    discount-percentage: uint,
+    is-tier-active: bool,
+  }
+)
+
+;; Customer transaction history for purchase tracking
+(define-map customer-transaction-records
+  {
+    customer-address: principal,
+    transaction-identifier: uint,
+  }
+  {
+    product-identifier: uint,
+    quantity-purchased: uint,
+    total-amount-paid: uint,
+    block-height-created: uint,
+    discount-percentage-applied: uint,
+  }
+)
