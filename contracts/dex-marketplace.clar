@@ -30,3 +30,27 @@
 (define-constant ERR-INVALID-INPUT-PARAMETER (err u110))
 (define-constant ERR-INVALID-PRODUCT-NAME (err u111))
 (define-constant ERR-INSUFFICIENT-STOCK (err u112))
+
+;; BUSINESS LOGIC CONSTANTS
+
+(define-constant maximum-product-name-length u64)
+(define-constant maximum-quantity-per-order u1000000)
+(define-constant maximum-price-per-unit u1000000000)
+(define-constant maximum-discount-percentage u100)
+(define-constant maximum-bulk-order-items u10)
+(define-constant minimum-product-name-length u1)
+(define-constant minimum-quantity-amount u1)
+(define-constant minimum-price-amount u1)
+
+;; DATA STRUCTURES
+
+;; Core product information with inventory tracking
+(define-map marketplace-product-catalog
+  { product-identifier: uint }
+  {
+    product-name: (string-ascii 64),
+    unit-price: uint,
+    stock-quantity: uint,
+    is-active: bool,
+  }
+)
